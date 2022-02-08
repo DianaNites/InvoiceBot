@@ -45,6 +45,7 @@ static GMAIL_SEND: &str = "https://gmail.googleapis.com/upload/gmail/v1/users/me
 static DRIVE_SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/gmail.send",
+    // "https://www.googleapis.com/auth/gmail.readonly"
     // "https://www.googleapis.com/auth/gmail.compose",
     // "https://www.googleapis.com/auth/spreadsheets",
 ];
@@ -95,6 +96,24 @@ struct FileResource {
 #[serde(rename_all = "camelCase")]
 struct ListResponse {
     files: Vec<FileResource>,
+}
+
+/// Google Drive About resource
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveAboutResponse {
+    user: DriveUser,
+}
+
+/// Google Drive About::user resource
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveUser {
+    /// Users Display name
+    display_name: String,
+
+    /// Users email address
+    email_address: String,
 }
 
 async fn check_access(client: &Client, path: &Path) -> Result<Access> {
@@ -274,6 +293,20 @@ async fn main() -> Result<()> {
                 access = refresh(&client, access, path).await?;
             }
         };
+    };
+    let (display, email) = {
+        let url = Url::parse_with_params(
+            "https://www.googleapis.com/drive/v3/about",
+            &[("fields", "user(displayName, emailAddress)")],
+        )?;
+        let res = client
+            .get(url)
+            .bearer_auth(&access.access_token)
+            .send()
+            .await?
+            .json::<DriveAboutResponse>()
+            .await?;
+        (res.user.display_name, res.user.email_address)
     };
     //
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
