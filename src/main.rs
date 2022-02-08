@@ -299,7 +299,8 @@ async fn main() -> Result<()> {
         GMAIL_SEND,
         &[
             //
-            ("uploadType", "media"),
+            // ("uploadType", "media"),
+            ("uploadType", "multipart"),
             ("prettyPrint", "false"),
         ],
     )?;
@@ -307,27 +308,28 @@ async fn main() -> Result<()> {
     // Message-ID: <1234@local.machine.example>
     let msg = format!(
         "\
-From: Diana <DianaNites@gmail.com>
-To: Diana <DianaNites@gmail.com>
-Subject: Test Message
+From: {to}
+To: {from}
+Subject: {subject}
 Content-Type: multipart/related; boundary=invoice_pdf
 
-Hello World Test
+--invoice_pdf
+
+Goodbye World Test
 
 --invoice_pdf
 Content-Type: application/pdf
 Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename=Invoice.pdf
+Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
 
 {}
-
---invoice_pdf
-Content-Type: message/rfc822
-
-Goodbye World Test
 --invoice_pdf--
     ",
-        base64::encode(&pdf)
+        base64::encode(&pdf),
+        to = "Diana <DianaNites@gmail.com>",
+        from = "Diana <DianaNites@gmail.com>",
+        subject = "Test",
+        iso_time = iso_time,
     )
     .replace('\n', "\r\n");
     let len = msg.len();
