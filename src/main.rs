@@ -256,6 +256,7 @@ async fn main() -> Result<()> {
     let sheets_time = time.format(format_description!("[month]/[day]/[year]"))?;
     let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
+    let output = Path::new("./scratch/test.pdf");
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
     let mut access: Access = check_access(&client, path).await?;
     let (file, folder) = loop {
@@ -280,7 +281,7 @@ async fn main() -> Result<()> {
         .await?;
 
     let pdf = file_export(&client, &access, &file.id).await?;
-    let file = fs::File::create("./scratch/test.pdf")?;
+    let file = fs::File::create(output)?;
     let mut file = BufWriter::new(file);
     file.write_all(&pdf)?;
     file.flush()?;
