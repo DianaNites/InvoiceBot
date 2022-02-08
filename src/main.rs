@@ -16,7 +16,7 @@ use url::Url;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Email that invoices should be sent to.
-// static INVOICE_EMAIL: &str = "Accounting <accounting@mobilecoin.com>";
+// static INVOICE_EMAIL: &str = "Accounting <`accounting@mobilecoin.com.dontuse`>";
 static INVOICE_EMAIL: &str = "Diana <DianaNites@gmail.com>";
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -131,6 +131,8 @@ async fn save_access(access: Access, path: &Path) -> Result<Access> {
     let mut buf = io::BufWriter::new(fs::File::create(path).await?);
     let json = serde_json::to_vec_pretty(&access)?;
     buf.write_all(&json).await?;
+    buf.flush().await?;
+    buf.into_inner().sync_all().await?;
     Ok(access)
 }
 
@@ -289,7 +291,7 @@ async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<
 }
 
 /// Get users name and email in the `Name <email>` format.
-async fn get_email(client: &Client, access: &Access) -> Result<String> {
+async fn get_email(client: &Client, access: &Access) -> Result<(String, String)> {
     let url = Url::parse_with_params(
         "https://www.googleapis.com/drive/v3/about",
         &[("fields", "user(displayName, emailAddress)")],
@@ -301,10 +303,7 @@ async fn get_email(client: &Client, access: &Access) -> Result<String> {
         .await?
         .json::<DriveAboutResponse>()
         .await?;
-    Ok(format!(
-        "{} <{}>",
-        res.user.display_name, res.user.email_address
-    ))
+    Ok((res.user.display_name, res.user.email_address))
 }
 
 /// Ready the invoice for submission
@@ -349,12 +348,13 @@ async fn ready_invoice(
 /// Send the email
 async fn send_email(client: &Client, access: &Access, pdf: &[u8], iso_time: &str) -> Result<()> {
     let url = Url::parse_with_params(GMAIL_SEND, &[("uploadType", "multipart")])?;
+    let (display, email) = get_email(client, access).await?;
 
     let msg = format!(
         "\
-From: {from}
+From: {from_name} <{from_email}>
 To: {to}
-Subject: {subject}
+Subject: Invoice - {subject}
 Content-Type: multipart/related; boundary=invoice_pdf
 
 --invoice_pdf
@@ -371,31 +371,17 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
     ",
         base64::encode(&pdf),
         to = INVOICE_EMAIL,
-        from = get_email(client, access).await?,
-        // TODO: Should be `Invoice - Name`
-        subject = "Invoice",
+        from_name = display,
+        from_email = email,
+        subject = display,
         iso_time = iso_time,
     )
     .replace('\n', "\r\n");
     let len = msg.len();
     client
         .post(url)
-        // .body(base64::encode_config(&pdf, URL_SAFE))
-        // .body(base64::encode_config(&msg, URL_SAFE))
         .body(msg)
-        // .json(&json!(
-        //     // DianaNites@gmail.com
-        //     {
-        //         //
-        //         // "raw": base64::encode_config(&pdf, URL_SAFE)
-        //         "raw": base64::encode_config(msg, URL_SAFE)
-        //     }
-        // ))
-        // .header(CONTENT_LENGTH, value)
-        // .header(CONTENT_TYPE, "application/pdf")
         .header(CONTENT_TYPE, "message/rfc822")
-        // .header(CONTENT_TYPE, "multipart/related; boundary=invoice_pdf")
-        // .header(CONTENT_LENGTH, pdf.len())
         .header(CONTENT_LENGTH, len)
         .bearer_auth(&access.access_token)
         .send()
