@@ -38,8 +38,8 @@ static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
 static SPREADSHEET_BASE: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
 /// Send an email as the authenticated user
-// static GMAIL_SEND: &str = "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send";
-static GMAIL_SEND: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+static GMAIL_SEND: &str = "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send";
+// static GMAIL_SEND: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
 /// Scopes our tokens need
 static DRIVE_SCOPES: &[&str] = &[
@@ -299,7 +299,7 @@ async fn main() -> Result<()> {
         GMAIL_SEND,
         &[
             //
-            // ("uploadType", "media"),
+            ("uploadType", "media"),
             ("prettyPrint", "false"),
         ],
     )?;
@@ -309,21 +309,38 @@ async fn main() -> Result<()> {
 From: Diana <DianaNites@gmail.com>
 To: Diana <DianaNites@gmail.com>
 Subject: Test Message
+Content-Type: multipart/related; boundary=invoice_pdf
 
-Test
+Test Message
+
+--invoice_pdf
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename=Invoice.pdf
 ";
+    let mut msg = Vec::from(msg.replace('\n', "\r\n"));
+    // msg.extend_from_slice(base64::encode_config(&pdf, URL_SAFE).as_bytes());
+    msg.extend_from_slice(base64::encode(&pdf).as_bytes());
+    let len = msg.len();
     let res = client
         .post(url)
-        .json(&json!(
-            // DianaNites@gmail.com
-            {
-                //
-                // "raw": base64::encode_config(pdf, URL_SAFE)
-                "raw": dbg!(base64::encode_config(msg, URL_SAFE))
-            }
-        ))
+        // .body(base64::encode_config(&pdf, URL_SAFE))
+        // .body(base64::encode_config(&msg, URL_SAFE))
+        .body(msg)
+        // .json(&json!(
+        //     // DianaNites@gmail.com
+        //     {
+        //         //
+        //         // "raw": base64::encode_config(&pdf, URL_SAFE)
+        //         "raw": base64::encode_config(msg, URL_SAFE)
+        //     }
+        // ))
         // .header(CONTENT_LENGTH, value)
-        .header(CONTENT_TYPE, "text/plain")
+        // .header(CONTENT_TYPE, "application/pdf")
+        .header(CONTENT_TYPE, "message/rfc822")
+        // .header(CONTENT_TYPE, "multipart/related; boundary=invoice_pdf")
+        // .header(CONTENT_LENGTH, pdf.len())
+        .header(CONTENT_LENGTH, len)
         .bearer_auth(&access.access_token)
         .send()
         .await?;
