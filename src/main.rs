@@ -27,7 +27,10 @@ static TOKEN_URI: &str = env!("TOKEN_URI");
 static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
 static FILE_COPY: &str = "https://www.googleapis.com/drive/v3/files/fileId/copy";
 
-static DRIVE_SCOPES: &[&str] = &["https://www.googleapis.com/auth/drive"];
+static DRIVE_SCOPES: &[&str] = &[
+    "https://www.googleapis.com/auth/drive",
+    // "https://www.googleapis.com/auth/spreadsheets",
+];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Access {
