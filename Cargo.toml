@@ -15,3 +15,4 @@ hyper-rustls = "0.23.0"
 reqwest = { version = "0.11.9", features = ["json", "gzip"] }
 tokio = { version = "1.16.1", features = ["full"] }
 url = "2.2.2"
+time = { version = "0.3.7", features = ["formatting", "macros"] }

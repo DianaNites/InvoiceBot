@@ -1,4 +1,10 @@
-#![allow(unused_imports, dead_code, unused_variables, unused_mut)]
+#![allow(
+    unused_imports,
+    dead_code,
+    unused_variables,
+    unused_mut,
+    unreachable_code
+)]
 use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Client;
@@ -8,6 +14,8 @@ use serde_json::Value;
 use std::fs;
 use std::io::{stdin, BufReader, BufWriter, Read};
 use std::path::Path;
+use time::macros::format_description;
+use time::OffsetDateTime;
 use tokio::join;
 use url::Url;
 
@@ -26,6 +34,7 @@ static TOKEN_URI: &str = env!("TOKEN_URI");
 
 static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
 static FILE_COPY: &str = "https://www.googleapis.com/drive/v3/files/fileId/copy";
+static SPREADSHEET_GET: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
 static DRIVE_SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/drive",
@@ -209,6 +218,9 @@ async fn file_copy(
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let time = OffsetDateTime::now_utc();
+    let sheets_time = time.format(format_description!("[month]/[day]/[year]"))?;
+    let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
     let mut access: Access = if path.exists() {
@@ -229,6 +241,23 @@ async fn main() -> Result<()> {
     dbg!(&folder);
     let file = file_copy(&client, &access, &folder.id, &file.id).await?;
     dbg!(&file);
+    let url = Url::parse_with_params(
+        &format!("{}/{}/values/D9:E9", SPREADSHEET_GET, file.id),
+        &[
+            //
+            ("valueInputOption", "USER_ENTERED"),
+            // ("includeGridData", "true"),
+            // ("ranges", "D9:E9"),
+        ],
+    )?;
+    let res = client
+        .put(url)
+        .json(&json!({ "values": [[sheets_time]] }))
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?;
+    let json = res.json::<Value>().await?;
+    dbg!(json);
 
     // application/vnd.google-apps.spreadsheet
     // application/vnd.google-apps.folder
