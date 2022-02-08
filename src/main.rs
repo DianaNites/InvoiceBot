@@ -41,15 +41,11 @@ static SPREADSHEET_BASE: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
 /// Send an email as the authenticated user
 static GMAIL_SEND: &str = "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send";
-// static GMAIL_SEND: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
 /// Scopes our tokens need
 static DRIVE_SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/gmail.send",
-    // "https://www.googleapis.com/auth/gmail.readonly"
-    // "https://www.googleapis.com/auth/gmail.compose",
-    // "https://www.googleapis.com/auth/spreadsheets",
 ];
 
 /// Oauth2 token information
