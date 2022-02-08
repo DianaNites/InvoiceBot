@@ -7,6 +7,7 @@ use serde_json::Value;
 use std::fs;
 use std::io::{stdin, BufReader, BufWriter, Read};
 use std::path::Path;
+use tokio::join;
 use url::Url;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -35,6 +36,40 @@ struct Access {
     refresh_token: String,
     scope: String,
     token_type: String,
+}
+
+/// Google Drive File Resource
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FileResource {
+    /// File ID
+    id: String,
+
+    /// File Name
+    name: String,
+
+    /// File Mime type
+    mime_type: String,
+
+    /// Parent folder IDs
+    parents: Vec<String>,
+
+    /// Web link
+    web_view_link: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListResponse {
+    files: Vec<FileResource>,
+}
+
+fn save_access(access: Access) -> Result<Access> {
+    serde_json::to_writer_pretty(
+        BufWriter::new(fs::File::create("./scratch/tokens.json")?),
+        &access,
+    )?;
+    Ok(access)
 }
 
 async fn first_access(client: &Client) -> Result<Access> {
@@ -73,11 +108,7 @@ async fn first_access(client: &Client) -> Result<Access> {
         .await?;
     let text: Access = res.json().await?;
     println!("{:#?}", text);
-    serde_json::to_writer_pretty(
-        BufWriter::new(fs::File::create("./scratch/tokens.json")?),
-        &text,
-    )?;
-    Ok(text)
+    save_access(text)
 }
 
 async fn refresh(client: &Client, access: Access) -> Result<Access> {
@@ -99,7 +130,7 @@ async fn refresh(client: &Client, access: Access) -> Result<Access> {
         .send()
         .await?;
     let text: Access = res.json().await?;
-    Ok(Access {
+    save_access(Access {
         refresh_token: access.refresh_token,
         ..text
     })
@@ -107,6 +138,49 @@ async fn refresh(client: &Client, access: Access) -> Result<Access> {
 
 async fn file_copy(file_id: &str) -> Result<Url> {
     Ok(Url::parse(&format!("{}/{}/copy", FILE_LIST, file_id))?)
+}
+
+/// Get the Invoice Template and Output Folder
+async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, FileResource)> {
+    let template = Url::parse_with_params(
+        FILE_LIST,
+        &[
+            (
+                "q",
+                "name='Invoice Template' and mimeType='application/vnd.google-apps.spreadsheet' and trashed = false",
+            ),
+            ("fields", "files(id, name, mimeType, parents, webViewLink)"),
+        ],
+    )?;
+    let folder = Url::parse_with_params(
+        FILE_LIST,
+        &[
+            (
+                "q",
+                "mimeType='application/vnd.google-apps.folder' and name='Test' and trashed = false",
+            ),
+            ("fields", "files(id, name, mimeType, parents, webViewLink)"),
+        ],
+    )?;
+    let (template, folder) = join!(
+        //
+        client
+            .get(template)
+            .bearer_auth(&access.access_token)
+            .send(),
+        client.get(folder).bearer_auth(&access.access_token).send()
+    );
+    let (template, folder) = join!(
+        // template?.json::<ListResponse>(),
+        template?.json::<Value>(),
+        folder?.json::<ListResponse>(),
+    );
+    dbg!(template)?;
+    todo!()
+    // let (mut template, mut folder) = (template?, folder?);
+    // dbg!(&template);
+    // let (template, folder) = (template.files.swap_remove(0), folder.files.swap_remove(0));
+    // Ok((template, folder))
 }
 
 #[tokio::main]
@@ -118,33 +192,11 @@ async fn main() -> Result<()> {
     } else {
         first_access(&client).await?
     };
-    let url = Url::parse_with_params(FILE_LIST, &[("q", "name='Invoice Template'")])?;
-    let res = client
-        .get(url)
-        .bearer_auth(&access.access_token)
-        .send()
-        .await?;
-    let json = res.json::<Value>().await?;
-    let file = &json.get("files").unwrap()[0];
+    let (file, folder) = get_files(&client, &access).await?;
     //
-    let url = Url::parse_with_params(
-        FILE_LIST,
-        &[(
-            "q",
-            "mimeType='application/vnd.google-apps.folder' and name='Test'",
-        )],
-    )?;
-    let res = client
-        .get(url)
-        .bearer_auth(&access.access_token)
-        .send()
-        .await?;
-    let json = res.json::<Value>().await?;
-    let folder = &json.get("files").unwrap()[0];
-    //
-    dbg!(file);
-    dbg!(folder);
-    let mut url = file_copy(file.get("id").unwrap().as_str().unwrap()).await?;
+    dbg!(&file);
+    dbg!(&folder);
+    let mut url = file_copy(&file.id).await?;
     println!("{}", url);
     // url.query_pairs_mut().extend_pairs(&[
     //     //
