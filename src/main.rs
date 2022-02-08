@@ -220,7 +220,7 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
         &[
             (
                 "q",
-                "name='Invoice Template' and mimeType='application/vnd.google-apps.spreadsheet' and trashed = false",
+                "name='Invoice Template' and mimeType='application/vnd.google-apps.spreadsheet' and trashed = false and visibility = 'limited'",
             ),
             ("fields", "files(id, name, mimeType, parents, webViewLink)"),
         ],
