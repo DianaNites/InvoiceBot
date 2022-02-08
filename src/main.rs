@@ -305,22 +305,31 @@ async fn main() -> Result<()> {
     )?;
     // Date: Fri, 21 Nov 1997 09:55:06 -0600
     // Message-ID: <1234@local.machine.example>
-    let msg = "\
+    let msg = format!(
+        "\
 From: Diana <DianaNites@gmail.com>
 To: Diana <DianaNites@gmail.com>
 Subject: Test Message
 Content-Type: multipart/related; boundary=invoice_pdf
 
-Test Message
+Hello World Test
 
 --invoice_pdf
 Content-Type: application/pdf
 Content-Transfer-Encoding: base64
 Content-Disposition: attachment; filename=Invoice.pdf
-";
-    let mut msg = Vec::from(msg.replace('\n', "\r\n"));
-    // msg.extend_from_slice(base64::encode_config(&pdf, URL_SAFE).as_bytes());
-    msg.extend_from_slice(base64::encode(&pdf).as_bytes());
+
+{}
+
+--invoice_pdf
+Content-Type: message/rfc822
+
+Goodbye World Test
+--invoice_pdf--
+    ",
+        base64::encode(&pdf)
+    )
+    .replace('\n', "\r\n");
     let len = msg.len();
     let res = client
         .post(url)
