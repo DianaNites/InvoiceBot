@@ -1,4 +1,3 @@
-use base64::URL_SAFE;
 use reqwest::{
     header::{CONTENT_LENGTH, CONTENT_TYPE},
     Client,
@@ -276,6 +275,36 @@ async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<
     Ok(json.to_vec())
 }
 
+/// Get users name and email in the `Name <email>` format.
+async fn get_email(client: &Client, access: &Access) -> Result<String> {
+    let url = Url::parse_with_params(
+        "https://www.googleapis.com/drive/v3/about",
+        &[("fields", "user(displayName, emailAddress)")],
+    )?;
+    let res = client
+        .get(url)
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?
+        .json::<DriveAboutResponse>()
+        .await?;
+    Ok(format!(
+        "{} <{}>",
+        res.user.display_name, res.user.email_address
+    ))
+}
+
+/// Ready the invoice for submission
+///
+/// This entails:
+///
+/// - Copying the template
+/// - Updating the date
+/// - Exporting as PDF
+async fn ready_invoice(client: &Client, access: &Access) {
+    //
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let time = OffsetDateTime::now_utc();
@@ -293,20 +322,6 @@ async fn main() -> Result<()> {
                 access = refresh(&client, access, path).await?;
             }
         };
-    };
-    let (display, email) = {
-        let url = Url::parse_with_params(
-            "https://www.googleapis.com/drive/v3/about",
-            &[("fields", "user(displayName, emailAddress)")],
-        )?;
-        let res = client
-            .get(url)
-            .bearer_auth(&access.access_token)
-            .send()
-            .await?
-            .json::<DriveAboutResponse>()
-            .await?;
-        (res.user.display_name, res.user.email_address)
     };
     //
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
@@ -361,7 +376,7 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
         base64::encode(&pdf),
         to = "Diana <DianaNites@gmail.com>",
         // from = "Diana <DianaNites@gmail.com>",
-        from = "Diana <me>",
+        from = get_email(&client, &access).await?,
         subject = "Test",
         iso_time = iso_time,
     )
