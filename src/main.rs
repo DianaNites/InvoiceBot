@@ -3,7 +3,7 @@ use reqwest::{
     Client,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use std::{
     fs,
     io::{stdin, BufReader, BufWriter, Write},
@@ -90,16 +90,22 @@ struct ListResponse {
     files: Vec<FileResource>,
 }
 
-/// Save
-fn save_access(access: Access) -> Result<Access> {
-    serde_json::to_writer_pretty(
-        BufWriter::new(fs::File::create("./scratch/tokens.json")?),
-        &access,
-    )?;
+async fn check_access(client: &Client, path: &Path) -> Result<Access> {
+    Ok(if path.exists() {
+        serde_json::from_reader(BufReader::new(fs::File::open(path)?))?
+    } else {
+        first_access(client, path).await?
+    })
+}
+
+/// Save oauth tokens
+fn save_access(access: Access, path: &Path) -> Result<Access> {
+    serde_json::to_writer_pretty(BufWriter::new(fs::File::create(path)?), &access)?;
     Ok(access)
 }
 
-async fn first_access(client: &Client) -> Result<Access> {
+/// First oauth access flow
+async fn first_access(client: &Client, path: &Path) -> Result<Access> {
     let auth_url = Url::parse_with_params(
         AUTH_URI,
         &[
@@ -134,11 +140,11 @@ async fn first_access(client: &Client) -> Result<Access> {
         .send()
         .await?;
     let text: Access = res.json().await?;
-    println!("{:#?}", text);
-    save_access(text)
+    save_access(text, path)
 }
 
-async fn refresh(client: &Client, access: Access) -> Result<Access> {
+/// Refresh our oauth token
+async fn refresh(client: &Client, access: Access, path: &Path) -> Result<Access> {
     let token_url = Url::parse_with_params(
         TOKEN_URI,
         &[
@@ -157,10 +163,13 @@ async fn refresh(client: &Client, access: Access) -> Result<Access> {
         .send()
         .await?;
     let text: Access = res.json().await?;
-    save_access(Access {
-        refresh_token: access.refresh_token,
-        ..text
-    })
+    save_access(
+        Access {
+            refresh_token: access.refresh_token,
+            ..text
+        },
+        path,
+    )
 }
 
 /// Get the Invoice Template and Output Folder
@@ -227,7 +236,6 @@ async fn file_copy(
         .send()
         .await?;
     let json = res.json::<FileResource>().await?;
-    dbg!(&json);
     Ok(json)
 }
 
@@ -247,7 +255,6 @@ async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<
         .send()
         .await?;
     let json = res.bytes().await?;
-    // dbg!(&json);
     Ok(json.to_vec())
 }
 
@@ -258,24 +265,17 @@ async fn main() -> Result<()> {
     let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
-    let mut access: Access = if path.exists() {
-        serde_json::from_reader(BufReader::new(fs::File::open(path)?))?
-    } else {
-        first_access(&client).await?
-    };
+    let mut access: Access = check_access(&client, path).await?;
     let (file, folder) = loop {
         match get_files(&client, &access).await {
             Ok(f) => break f,
             Err(_) => {
-                access = refresh(&client, access).await?;
+                access = refresh(&client, access, path).await?;
             }
         };
     };
     //
-    dbg!(&file);
-    dbg!(&folder);
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
-    dbg!(&file);
     let url = Url::parse_with_params(
         &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
         &[
@@ -285,14 +285,12 @@ async fn main() -> Result<()> {
             // ("ranges", "D9:E9"),
         ],
     )?;
-    let res = client
+    let _res = client
         .put(url)
         .json(&json!({ "values": [[sheets_time]] }))
         .bearer_auth(&access.access_token)
         .send()
         .await?;
-    let json = res.json::<Value>().await?;
-    dbg!(json);
 
     let pdf = file_export(&client, &access, &file.id).await?;
     let file = fs::File::create("./scratch/test.pdf")?;
