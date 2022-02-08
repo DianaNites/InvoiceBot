@@ -229,7 +229,7 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
         &[
             (
                 "q",
-                "mimeType='application/vnd.google-apps.folder' and name='Test' and trashed = false",
+                "mimeType='application/vnd.google-apps.folder' and name='MobileCoin' and trashed = false",
             ),
             ("fields", "files(id, name, mimeType, parents, webViewLink)"),
         ],
@@ -336,7 +336,7 @@ async fn ready_invoice(
         .await?
         .error_for_status()?;
     //
-    let output = output_base.join(file.name);
+    let output = output_base.join(file.name).with_extension("pdf");
     let pdf = file_export(client, access, &file.id).await?;
     let mut file = io::BufWriter::new(fs::File::create(output).await?);
     file.write_all(&pdf).await?;
