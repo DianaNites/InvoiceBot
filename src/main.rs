@@ -1,21 +1,15 @@
-#![allow(
-    unused_imports,
-    dead_code,
-    unused_variables,
-    unused_mut,
-    unreachable_code
-)]
-use reqwest::header::CONTENT_LENGTH;
-use reqwest::header::CONTENT_TYPE;
-use reqwest::Client;
+use reqwest::{
+    header::{CONTENT_LENGTH, CONTENT_TYPE},
+    Client,
+};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use serde_json::Value;
-use std::fs;
-use std::io::{stdin, BufReader, BufWriter, Read};
-use std::path::Path;
-use time::macros::format_description;
-use time::OffsetDateTime;
+use serde_json::{json, Value};
+use std::{
+    fs,
+    io::{stdin, BufReader, BufWriter, Write},
+    path::Path,
+};
+use time::{macros::format_description, OffsetDateTime};
 use tokio::join;
 use url::Url;
 
@@ -33,7 +27,6 @@ static AUTH_URI: &str = env!("AUTH_URI");
 static TOKEN_URI: &str = env!("TOKEN_URI");
 
 static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
-static FILE_COPY: &str = "https://www.googleapis.com/drive/v3/files/fileId/copy";
 static SPREADSHEET_GET: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
 static DRIVE_SCOPES: &[&str] = &[
@@ -217,6 +210,26 @@ async fn file_copy(
     Ok(json)
 }
 
+/// Export invoice to PDF
+async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<Vec<u8>> {
+    let url = Url::parse_with_params(
+        &format!("{}/{}/export", FILE_LIST, file_id),
+        &[
+            //
+            ("mimeType", "application/pdf"),
+            // ("fields", "id, name, mimeType, parents, webViewLink"),
+        ],
+    )?;
+    let res = client
+        .get(url)
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?;
+    let json = res.bytes().await?;
+    // dbg!(&json);
+    Ok(json.to_vec())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let time = OffsetDateTime::now_utc();
@@ -260,7 +273,12 @@ async fn main() -> Result<()> {
     let json = res.json::<Value>().await?;
     dbg!(json);
 
-    // application/vnd.google-apps.spreadsheet
-    // application/vnd.google-apps.folder
+    let pdf = file_export(&client, &access, &file.id).await?;
+    let file = fs::File::create("./scratch/test.pdf")?;
+    let mut file = BufWriter::new(file);
+    file.write_all(&pdf)?;
+    file.flush()?;
+    file.into_inner()?.sync_all()?;
+
     Ok(())
 }
