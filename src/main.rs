@@ -334,6 +334,12 @@ async fn ready_invoice(
     Ok(pdf)
 }
 
+/// Send the email
+async fn send_email(client: &Client, access: &Access) -> Result<()> {
+    //
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let time = OffsetDateTime::now_utc();
@@ -352,20 +358,6 @@ async fn main() -> Result<()> {
             }
         };
     };
-    //
-    //
-    let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
-    let url = Url::parse_with_params(
-        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
-        &[("valueInputOption", "USER_ENTERED")],
-    )?;
-    let _res = client
-        .put(url)
-        .json(&json!({ "values": [[sheets_time]] }))
-        .bearer_auth(&access.access_token)
-        .send()
-        .await?;
-
     let pdf = ready_invoice(
         &client,
         &access,
@@ -377,17 +369,8 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let url = Url::parse_with_params(
-        GMAIL_SEND,
-        &[
-            //
-            // ("uploadType", "media"),
-            ("uploadType", "multipart"),
-            ("prettyPrint", "false"),
-        ],
-    )?;
-    // Date: Fri, 21 Nov 1997 09:55:06 -0600
-    // Message-ID: <1234@local.machine.example>
+    let url = Url::parse_with_params(GMAIL_SEND, &[("uploadType", "multipart")])?;
+
     let msg = format!(
         "\
 From: {from}
@@ -409,7 +392,6 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
     ",
         base64::encode(&pdf),
         to = "Diana <DianaNites@gmail.com>",
-        // from = "Diana <DianaNites@gmail.com>",
         from = get_email(&client, &access).await?,
         subject = "Test",
         iso_time = iso_time,
