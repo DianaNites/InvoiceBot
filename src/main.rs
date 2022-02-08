@@ -354,7 +354,7 @@ async fn send_email(client: &Client, access: &Access, pdf: &[u8], iso_time: &str
         "\
 From: {from_name} <{from_email}>
 To: {to}
-Subject: Invoice - {subject}
+Subject: Invoice - {from_name} - {iso_time}
 Content-Type: multipart/related; boundary=invoice_pdf
 
 --invoice_pdf
@@ -364,7 +364,7 @@ Here is my invoice for the previous 2 weeks, thank you.
 --invoice_pdf
 Content-Type: application/pdf
 Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
+Content-Disposition: attachment; filename=Invoice-{from_name}-{iso_time}.pdf
 
 {}
 --invoice_pdf--
@@ -373,7 +373,6 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
         to = INVOICE_EMAIL,
         from_name = display,
         from_email = email,
-        subject = display,
         iso_time = iso_time,
     )
     .replace('\n', "\r\n");
