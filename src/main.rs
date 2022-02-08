@@ -3,6 +3,7 @@ use reqwest::header::CONTENT_LENGTH;
 use reqwest::header::CONTENT_TYPE;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_json::Value;
 use std::fs;
 use std::io::{stdin, BufReader, BufWriter, Read};
@@ -136,10 +137,6 @@ async fn refresh(client: &Client, access: Access) -> Result<Access> {
     })
 }
 
-async fn file_copy(file_id: &str) -> Result<Url> {
-    Ok(Url::parse(&format!("{}/{}/copy", FILE_LIST, file_id))?)
-}
-
 /// Get the Invoice Template and Output Folder
 async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, FileResource)> {
     let template = Url::parse_with_params(
@@ -179,6 +176,10 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
     Ok((template, folder))
 }
 
+async fn file_copy(file_id: &str) -> Result<Url> {
+    Ok(Url::parse(&format!("{}/{}/copy", FILE_LIST, file_id))?)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let path = Path::new("./scratch/tokens.json");
@@ -201,13 +202,24 @@ async fn main() -> Result<()> {
     dbg!(&folder);
     let mut url = file_copy(&file.id).await?;
     println!("{}", url);
-    // url.query_pairs_mut().extend_pairs(&[
-    //     //
-    //     // ("TEST", ""),
-    //     // ("TEST", ""),
-    //     ("", ""),
-    // ]);
-    // println!("{}", url);
+    url.query_pairs_mut().extend_pairs(&[
+        //
+        // ("TEST", ""),
+        // ("TEST", ""),
+        ("fields", "id, name, mimeType, parents, webViewLink"),
+    ]);
+    println!("{}", url);
+    let res = client
+        .post(url)
+        .bearer_auth(&access.access_token)
+        .json(&json!({
+            "name": "Invoice",
+            "parents": [folder.id]
+        }))
+        .send()
+        .await?;
+    let json = res.json::<FileResource>().await?;
+    dbg!(json);
 
     // application/vnd.google-apps.spreadsheet
     // application/vnd.google-apps.folder
