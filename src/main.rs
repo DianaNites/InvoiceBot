@@ -4,13 +4,13 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{
-    fs,
-    io::{stdin, BufReader, BufWriter, Write},
-    path::Path,
-};
+use std::{io::stdin, path::Path};
 use time::{macros::format_description, OffsetDateTime};
-use tokio::join;
+use tokio::{
+    fs,
+    io::{self, AsyncReadExt, AsyncWriteExt},
+    join, task,
+};
 use url::Url;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -117,15 +117,20 @@ struct DriveUser {
 
 async fn check_access(client: &Client, path: &Path) -> Result<Access> {
     Ok(if path.exists() {
-        serde_json::from_reader(BufReader::new(fs::File::open(path)?))?
+        let mut buf = io::BufReader::new(fs::File::open(path).await?);
+        let mut json = Vec::new();
+        buf.read_to_end(&mut json).await?;
+        serde_json::from_slice(&json)?
     } else {
         first_access(client, path).await?
     })
 }
 
 /// Save oauth tokens
-fn save_access(access: Access, path: &Path) -> Result<Access> {
-    serde_json::to_writer_pretty(BufWriter::new(fs::File::create(path)?), &access)?;
+async fn save_access(access: Access, path: &Path) -> Result<Access> {
+    let mut buf = io::BufWriter::new(fs::File::create(path).await?);
+    let json = serde_json::to_vec_pretty(&access)?;
+    buf.write_all(&json).await?;
     Ok(access)
 }
 
@@ -143,8 +148,12 @@ async fn first_access(client: &Client, path: &Path) -> Result<Access> {
     )?;
     println!("Please open the following link: \n{}", auth_url);
     println!("Please copy the authorization code here:\n");
-    let mut auth = String::new();
-    stdin().read_line(&mut auth)?;
+    let auth = task::spawn_blocking(|| {
+        let mut auth = String::new();
+        stdin().read_line(&mut auth).unwrap();
+        auth
+    })
+    .await?;
     let token_url = Url::parse_with_params(
         TOKEN_URI,
         &[
@@ -165,7 +174,10 @@ async fn first_access(client: &Client, path: &Path) -> Result<Access> {
         .send()
         .await?;
     let text: Access = res.json().await?;
-    save_access(text, path)
+    if text.scope.split(' ').count() != DRIVE_SCOPES.len() {
+        return Err("Required scopes not provided. Please select all scopes.".into());
+    }
+    save_access(text, path).await
 }
 
 /// Refresh our oauth token
@@ -195,6 +207,7 @@ async fn refresh(client: &Client, access: Access, path: &Path) -> Result<Access>
         },
         path,
     )
+    .await
 }
 
 /// Get the Invoice Template and Output Folder
@@ -326,11 +339,10 @@ async fn ready_invoice(
     //
     let output = output_base.join(file.name);
     let pdf = file_export(client, access, &file.id).await?;
-    let file = fs::File::create(output)?;
-    let mut file = BufWriter::new(file);
-    file.write_all(&pdf)?;
-    file.flush()?;
-    file.into_inner()?.sync_all()?;
+    let mut file = io::BufWriter::new(fs::File::create(output).await?);
+    file.write_all(&pdf).await?;
+    file.flush().await?;
+    file.into_inner().sync_all().await?;
     Ok(pdf)
 }
 
@@ -359,7 +371,7 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
     ",
         base64::encode(&pdf),
         to = INVOICE_EMAIL,
-        from = get_email(&client, &access).await?,
+        from = get_email(client, access).await?,
         // TODO: Should be `Invoice - Name`
         subject = "Invoice",
         iso_time = iso_time,
@@ -399,7 +411,7 @@ async fn main() -> Result<()> {
     let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
     let output_base = Path::new("./scratch/invoices");
-    fs::create_dir_all("./scratch")?;
+    fs::create_dir_all("./scratch").await?;
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
     let mut access: Access = check_access(&client, path).await?;
     let (file, folder) = loop {
