@@ -257,6 +257,7 @@ async fn main() -> Result<()> {
     let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
     let output = Path::new("./scratch/test.pdf");
+    fs::create_dir_all("./scratch")?;
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
     let mut access: Access = check_access(&client, path).await?;
     let (file, folder) = loop {
