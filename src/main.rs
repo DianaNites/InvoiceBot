@@ -195,7 +195,6 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
         ],
     )?;
     let (template, folder) = join!(
-        //
         client
             .get(template)
             .bearer_auth(&access.access_token)
@@ -221,10 +220,7 @@ async fn file_copy(
 ) -> Result<FileResource> {
     let url = Url::parse_with_params(
         &format!("{}/{}/copy", FILE_LIST, file_id),
-        &[
-            //
-            ("fields", "id, name, mimeType, parents, webViewLink"),
-        ],
+        &[("fields", "id, name, mimeType, parents, webViewLink")],
     )?;
     let res = client
         .post(url)
@@ -243,11 +239,7 @@ async fn file_copy(
 async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<Vec<u8>> {
     let url = Url::parse_with_params(
         &format!("{}/{}/export", FILE_LIST, file_id),
-        &[
-            //
-            ("mimeType", "application/pdf"),
-            // ("fields", "id, name, mimeType, parents, webViewLink"),
-        ],
+        &[("mimeType", "application/pdf")],
     )?;
     let res = client
         .get(url)
@@ -278,12 +270,7 @@ async fn main() -> Result<()> {
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
     let url = Url::parse_with_params(
         &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
-        &[
-            //
-            ("valueInputOption", "USER_ENTERED"),
-            // ("includeGridData", "true"),
-            // ("ranges", "D9:E9"),
-        ],
+        &[("valueInputOption", "USER_ENTERED")],
     )?;
     let _res = client
         .put(url)
