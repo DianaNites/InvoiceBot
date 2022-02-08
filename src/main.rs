@@ -15,6 +15,9 @@ use url::Url;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// Email that invoices should be sent to.
+static INVOICE_EMAIL: &str = "Diana <DianaNites@gmail.com>";
+
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 /// Oauth Client ID
@@ -335,8 +338,60 @@ async fn ready_invoice(
 }
 
 /// Send the email
-async fn send_email(client: &Client, access: &Access) -> Result<()> {
-    //
+async fn send_email(client: &Client, access: &Access, pdf: &[u8], iso_time: &str) -> Result<()> {
+    let url = Url::parse_with_params(GMAIL_SEND, &[("uploadType", "multipart")])?;
+
+    let msg = format!(
+        "\
+From: {from}
+To: {to}
+Subject: {subject}
+Content-Type: multipart/related; boundary=invoice_pdf
+
+--invoice_pdf
+
+Here is my invoice for the previous 2 weeks, thank you.
+
+--invoice_pdf
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
+
+{}
+--invoice_pdf--
+    ",
+        base64::encode(&pdf),
+        to = INVOICE_EMAIL,
+        from = get_email(&client, &access).await?,
+        // TODO: Should be `Invoice - Name`
+        subject = "Invoice",
+        iso_time = iso_time,
+    )
+    .replace('\n', "\r\n");
+    let len = msg.len();
+    client
+        .post(url)
+        // .body(base64::encode_config(&pdf, URL_SAFE))
+        // .body(base64::encode_config(&msg, URL_SAFE))
+        .body(msg)
+        // .json(&json!(
+        //     // DianaNites@gmail.com
+        //     {
+        //         //
+        //         // "raw": base64::encode_config(&pdf, URL_SAFE)
+        //         "raw": base64::encode_config(msg, URL_SAFE)
+        //     }
+        // ))
+        // .header(CONTENT_LENGTH, value)
+        // .header(CONTENT_TYPE, "application/pdf")
+        .header(CONTENT_TYPE, "message/rfc822")
+        // .header(CONTENT_TYPE, "multipart/related; boundary=invoice_pdf")
+        // .header(CONTENT_LENGTH, pdf.len())
+        .header(CONTENT_LENGTH, len)
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?
+        .error_for_status()?;
     Ok(())
 }
 
@@ -369,60 +424,7 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let url = Url::parse_with_params(GMAIL_SEND, &[("uploadType", "multipart")])?;
-
-    let msg = format!(
-        "\
-From: {from}
-To: {to}
-Subject: {subject}
-Content-Type: multipart/related; boundary=invoice_pdf
-
---invoice_pdf
-
-Here is my invoice for the previous 2 weeks, thank you.
-
---invoice_pdf
-Content-Type: application/pdf
-Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
-
-{}
---invoice_pdf--
-    ",
-        base64::encode(&pdf),
-        to = "Diana <DianaNites@gmail.com>",
-        from = get_email(&client, &access).await?,
-        subject = "Test",
-        iso_time = iso_time,
-    )
-    .replace('\n', "\r\n");
-    let len = msg.len();
-    let res = client
-        .post(url)
-        // .body(base64::encode_config(&pdf, URL_SAFE))
-        // .body(base64::encode_config(&msg, URL_SAFE))
-        .body(msg)
-        // .json(&json!(
-        //     // DianaNites@gmail.com
-        //     {
-        //         //
-        //         // "raw": base64::encode_config(&pdf, URL_SAFE)
-        //         "raw": base64::encode_config(msg, URL_SAFE)
-        //     }
-        // ))
-        // .header(CONTENT_LENGTH, value)
-        // .header(CONTENT_TYPE, "application/pdf")
-        .header(CONTENT_TYPE, "message/rfc822")
-        // .header(CONTENT_TYPE, "multipart/related; boundary=invoice_pdf")
-        // .header(CONTENT_LENGTH, pdf.len())
-        .header(CONTENT_LENGTH, len)
-        .bearer_auth(&access.access_token)
-        .send()
-        .await?;
-    // let res = res.text().await?;
-    let res = res.json::<serde_json::Value>().await?;
-    dbg!(res);
+    send_email(&client, &access, &pdf, &iso_time).await?;
 
     Ok(())
 }
