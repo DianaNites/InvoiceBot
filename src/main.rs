@@ -1,3 +1,4 @@
+use base64::URL_SAFE;
 use reqwest::{
     header::{CONTENT_LENGTH, CONTENT_TYPE},
     Client,
@@ -36,9 +37,15 @@ static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
 /// https://developers.google.com/sheets/api/reference/rest
 static SPREADSHEET_BASE: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
+/// Send an email as the authenticated user
+// static GMAIL_SEND: &str = "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send";
+static GMAIL_SEND: &str = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+
 /// Scopes our tokens need
 static DRIVE_SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/gmail.send",
+    // "https://www.googleapis.com/auth/gmail.compose",
     // "https://www.googleapis.com/auth/spreadsheets",
 ];
 
@@ -287,6 +294,42 @@ async fn main() -> Result<()> {
     file.write_all(&pdf)?;
     file.flush()?;
     file.into_inner()?.sync_all()?;
+    //
+    let url = Url::parse_with_params(
+        GMAIL_SEND,
+        &[
+            //
+            // ("uploadType", "media"),
+            ("prettyPrint", "false"),
+        ],
+    )?;
+    // Date: Fri, 21 Nov 1997 09:55:06 -0600
+    // Message-ID: <1234@local.machine.example>
+    let msg = "\
+From: Diana <DianaNites@gmail.com>
+To: Diana <DianaNites@gmail.com>
+Subject: Test Message
+
+Test
+";
+    let res = client
+        .post(url)
+        .json(&json!(
+            // DianaNites@gmail.com
+            {
+                //
+                // "raw": base64::encode_config(pdf, URL_SAFE)
+                "raw": dbg!(base64::encode_config(msg, URL_SAFE))
+            }
+        ))
+        // .header(CONTENT_LENGTH, value)
+        .header(CONTENT_TYPE, "text/plain")
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?;
+    // let res = res.text().await?;
+    let res = res.json::<serde_json::Value>().await?;
+    dbg!(res);
 
     Ok(())
 }
