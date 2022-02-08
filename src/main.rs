@@ -194,6 +194,7 @@ async fn file_copy(
     access: &Access,
     folder_id: &str,
     file_id: &str,
+    iso_time: &str,
 ) -> Result<FileResource> {
     let url = Url::parse_with_params(
         &format!("{}/{}/copy", FILE_LIST, file_id),
@@ -206,7 +207,7 @@ async fn file_copy(
         .post(url)
         .bearer_auth(&access.access_token)
         .json(&json!({
-            "name": "Invoice",
+            "name": format!("Invoice-{}", iso_time),
             "parents": [folder_id]
         }))
         .send()
@@ -239,7 +240,7 @@ async fn main() -> Result<()> {
     //
     dbg!(&file);
     dbg!(&folder);
-    let file = file_copy(&client, &access, &folder.id, &file.id).await?;
+    let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
     dbg!(&file);
     let url = Url::parse_with_params(
         &format!("{}/{}/values/D9:E9", SPREADSHEET_GET, file.id),
