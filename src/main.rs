@@ -308,14 +308,14 @@ async fn main() -> Result<()> {
     // Message-ID: <1234@local.machine.example>
     let msg = format!(
         "\
-From: {to}
-To: {from}
+From: {from}
+To: {to}
 Subject: {subject}
 Content-Type: multipart/related; boundary=invoice_pdf
 
 --invoice_pdf
 
-Goodbye World Test
+Here is my invoice for the previous 2 weeks, thank you.
 
 --invoice_pdf
 Content-Type: application/pdf
@@ -327,7 +327,8 @@ Content-Disposition: attachment; filename=Invoice-{iso_time}.pdf
     ",
         base64::encode(&pdf),
         to = "Diana <DianaNites@gmail.com>",
-        from = "Diana <DianaNites@gmail.com>",
+        // from = "Diana <DianaNites@gmail.com>",
+        from = "Diana <me>",
         subject = "Test",
         iso_time = iso_time,
     )
