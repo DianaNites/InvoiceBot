@@ -171,28 +171,31 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
         client.get(folder).bearer_auth(&access.access_token).send()
     );
     let (template, folder) = join!(
-        // template?.json::<ListResponse>(),
-        template?.json::<Value>(),
-        folder?.json::<ListResponse>(),
+        template?.error_for_status()?.json::<ListResponse>(),
+        folder?.error_for_status()?.json::<ListResponse>(),
     );
-    dbg!(template)?;
-    todo!()
-    // let (mut template, mut folder) = (template?, folder?);
-    // dbg!(&template);
-    // let (template, folder) = (template.files.swap_remove(0), folder.files.swap_remove(0));
-    // Ok((template, folder))
+    let (mut template, mut folder) = (template?, folder?);
+    let (template, folder) = (template.files.swap_remove(0), folder.files.swap_remove(0));
+    Ok((template, folder))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let path = Path::new("./scratch/tokens.json");
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
-    let access: Access = if path.exists() {
+    let mut access: Access = if path.exists() {
         serde_json::from_reader(BufReader::new(fs::File::open(path)?))?
     } else {
         first_access(&client).await?
     };
-    let (file, folder) = get_files(&client, &access).await?;
+    let (file, folder) = loop {
+        match get_files(&client, &access).await {
+            Ok(f) => break f,
+            Err(_) => {
+                access = refresh(&client, access).await?;
+            }
+        };
+    };
     //
     dbg!(&file);
     dbg!(&folder);
