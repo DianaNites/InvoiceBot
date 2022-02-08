@@ -301,8 +301,37 @@ async fn get_email(client: &Client, access: &Access) -> Result<String> {
 /// - Copying the template
 /// - Updating the date
 /// - Exporting as PDF
-async fn ready_invoice(client: &Client, access: &Access) {
+/// - Returning the PDF bytes
+async fn ready_invoice(
+    client: &Client,
+    access: &Access,
+    file_id: &str,
+    folder_id: &str,
+    sheets_time: &str,
+    iso_time: &str,
+    output_base: &Path,
+) -> Result<Vec<u8>> {
+    let file = file_copy(client, access, folder_id, file_id, iso_time).await?;
+    let url = Url::parse_with_params(
+        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
+        &[("valueInputOption", "USER_ENTERED")],
+    )?;
+    client
+        .put(url)
+        .json(&json!({ "values": [[sheets_time]] }))
+        .bearer_auth(&access.access_token)
+        .send()
+        .await?
+        .error_for_status()?;
     //
+    let output = output_base.join(file.name);
+    let pdf = file_export(client, access, &file.id).await?;
+    let file = fs::File::create(output)?;
+    let mut file = BufWriter::new(file);
+    file.write_all(&pdf)?;
+    file.flush()?;
+    file.into_inner()?.sync_all()?;
+    Ok(pdf)
 }
 
 #[tokio::main]
@@ -311,7 +340,7 @@ async fn main() -> Result<()> {
     let sheets_time = time.format(format_description!("[month]/[day]/[year]"))?;
     let iso_time = time.format(format_description!("[year]-[month]-[day]"))?;
     let path = Path::new("./scratch/tokens.json");
-    let output = Path::new("./scratch/test.pdf");
+    let output_base = Path::new("./scratch/invoices");
     fs::create_dir_all("./scratch")?;
     let client = Client::builder().user_agent(APP_USER_AGENT).build()?;
     let mut access: Access = check_access(&client, path).await?;
@@ -323,6 +352,7 @@ async fn main() -> Result<()> {
             }
         };
     };
+    //
     //
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
     let url = Url::parse_with_params(
@@ -336,13 +366,17 @@ async fn main() -> Result<()> {
         .send()
         .await?;
 
-    let pdf = file_export(&client, &access, &file.id).await?;
-    let file = fs::File::create(output)?;
-    let mut file = BufWriter::new(file);
-    file.write_all(&pdf)?;
-    file.flush()?;
-    file.into_inner()?.sync_all()?;
-    //
+    let pdf = ready_invoice(
+        &client,
+        &access,
+        &file.id,
+        &folder.id,
+        &sheets_time,
+        &iso_time,
+        output_base,
+    )
+    .await?;
+
     let url = Url::parse_with_params(
         GMAIL_SEND,
         &[
