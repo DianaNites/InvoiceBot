@@ -26,21 +26,40 @@ static AUTH_URI: &str = env!("AUTH_URI");
 /// Oauth token URL
 static TOKEN_URI: &str = env!("TOKEN_URI");
 
+/// List files on google drive
+///
+/// https://developers.google.com/drive/api/v3/reference/files/list
 static FILE_LIST: &str = "https://www.googleapis.com/drive/v3/files";
-static SPREADSHEET_GET: &str = "https://sheets.googleapis.com/v4/spreadsheets";
 
+/// Base spreadsheet URL
+///
+/// https://developers.google.com/sheets/api/reference/rest
+static SPREADSHEET_BASE: &str = "https://sheets.googleapis.com/v4/spreadsheets";
+
+/// Scopes our tokens need
 static DRIVE_SCOPES: &[&str] = &[
     "https://www.googleapis.com/auth/drive",
     // "https://www.googleapis.com/auth/spreadsheets",
 ];
 
+/// Oauth2 token information
 #[derive(Debug, Serialize, Deserialize)]
 struct Access {
+    /// Temporary access token
     access_token: String,
+
+    /// Seconds until `access_token` expires
     expires_in: u64,
+
+    /// Token to refresh `access_token`
+    // This isnt returned when refreshing
     #[serde(default)]
     refresh_token: String,
+
+    /// Space separated list of scopes we got access to
     scope: String,
+
+    /// Always Bearer
     token_type: String,
 }
 
@@ -64,12 +83,14 @@ struct FileResource {
     web_view_link: String,
 }
 
+/// Returned from Files::list
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ListResponse {
     files: Vec<FileResource>,
 }
 
+/// Save
 fn save_access(access: Access) -> Result<Access> {
     serde_json::to_writer_pretty(
         BufWriter::new(fs::File::create("./scratch/tokens.json")?),
@@ -89,7 +110,8 @@ async fn first_access(client: &Client) -> Result<Access> {
             ("scope", &DRIVE_SCOPES.join(" ")),
         ],
     )?;
-    println!("{}", auth_url);
+    println!("Please open the following link: \n{}", auth_url);
+    println!("Please copy the authorization code here:\n");
     let mut auth = String::new();
     stdin().read_line(&mut auth)?;
     let token_url = Url::parse_with_params(
@@ -104,7 +126,6 @@ async fn first_access(client: &Client) -> Result<Access> {
             ("redirect_uri", "urn:ietf:wg:oauth:2.0:oob"),
         ],
     )?;
-    // println!("{}", token_url);
     let res = client
         .post(token_url)
         .body("")
@@ -256,7 +277,7 @@ async fn main() -> Result<()> {
     let file = file_copy(&client, &access, &folder.id, &file.id, &iso_time).await?;
     dbg!(&file);
     let url = Url::parse_with_params(
-        &format!("{}/{}/values/D9:E9", SPREADSHEET_GET, file.id),
+        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
         &[
             //
             ("valueInputOption", "USER_ENTERED"),
