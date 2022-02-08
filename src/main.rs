@@ -176,8 +176,32 @@ async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, Fi
     Ok((template, folder))
 }
 
-async fn file_copy(file_id: &str) -> Result<Url> {
-    Ok(Url::parse(&format!("{}/{}/copy", FILE_LIST, file_id))?)
+/// Copy invoice template to final destination
+async fn file_copy(
+    client: &Client,
+    access: &Access,
+    folder_id: &str,
+    file_id: &str,
+) -> Result<FileResource> {
+    let url = Url::parse_with_params(
+        &format!("{}/{}/copy", FILE_LIST, file_id),
+        &[
+            //
+            ("fields", "id, name, mimeType, parents, webViewLink"),
+        ],
+    )?;
+    let res = client
+        .post(url)
+        .bearer_auth(&access.access_token)
+        .json(&json!({
+            "name": "Invoice",
+            "parents": [folder_id]
+        }))
+        .send()
+        .await?;
+    let json = res.json::<FileResource>().await?;
+    dbg!(&json);
+    Ok(json)
 }
 
 #[tokio::main]
@@ -200,26 +224,8 @@ async fn main() -> Result<()> {
     //
     dbg!(&file);
     dbg!(&folder);
-    let mut url = file_copy(&file.id).await?;
-    println!("{}", url);
-    url.query_pairs_mut().extend_pairs(&[
-        //
-        // ("TEST", ""),
-        // ("TEST", ""),
-        ("fields", "id, name, mimeType, parents, webViewLink"),
-    ]);
-    println!("{}", url);
-    let res = client
-        .post(url)
-        .bearer_auth(&access.access_token)
-        .json(&json!({
-            "name": "Invoice",
-            "parents": [folder.id]
-        }))
-        .send()
-        .await?;
-    let json = res.json::<FileResource>().await?;
-    dbg!(json);
+    let file = file_copy(&client, &access, &folder.id, &file.id).await?;
+    dbg!(&file);
 
     // application/vnd.google-apps.spreadsheet
     // application/vnd.google-apps.folder
