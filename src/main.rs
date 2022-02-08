@@ -214,6 +214,7 @@ async fn refresh(client: &Client, access: Access, path: &Path) -> Result<Access>
 
 /// Get the Invoice Template and Output Folder
 async fn get_files(client: &Client, access: &Access) -> Result<(FileResource, FileResource)> {
+    // TODO: Check parent folders.
     let template = Url::parse_with_params(
         FILE_LIST,
         &[
@@ -266,6 +267,7 @@ async fn file_copy(
         .post(url)
         .bearer_auth(&access.access_token)
         .json(&json!({
+            // TODO: Check that copy doesn't already exist
             "name": format!("Invoice-{}", iso_time),
             "parents": [folder_id]
         }))
