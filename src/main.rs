@@ -318,7 +318,7 @@ async fn get_email(client: &Client, access: &Access) -> Result<(String, String)>
 /// - Copying the template
 /// - Updating the date
 /// - Exporting as PDF
-/// - Returning the PDF bytes
+/// - Returning the PDF bytes and google drive file
 async fn ready_invoice(
     client: &Client,
     access: &Access,
@@ -327,10 +327,10 @@ async fn ready_invoice(
     sheets_time: &str,
     iso_time: &str,
     output_base: &Path,
-) -> Result<Vec<u8>> {
-    let file = file_copy(client, access, folder_id, file_id, iso_time).await?;
+) -> Result<(Vec<u8>, FileResource)> {
+    let pdf_file = file_copy(client, access, folder_id, file_id, iso_time).await?;
     let url = Url::parse_with_params(
-        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, file.id),
+        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, pdf_file.id),
         &[("valueInputOption", "USER_ENTERED")],
     )?;
     client
@@ -341,13 +341,13 @@ async fn ready_invoice(
         .await?
         .error_for_status()?;
     //
-    let output = output_base.join(file.name).with_extension("pdf");
-    let pdf = file_export(client, access, &file.id).await?;
+    let output = output_base.join(&pdf_file.name).with_extension("pdf");
+    let pdf = file_export(client, access, &pdf_file.id).await?;
     let mut file = io::BufWriter::new(fs::File::create(output).await?);
     file.write_all(&pdf).await?;
     file.flush().await?;
     file.into_inner().sync_all().await?;
-    Ok(pdf)
+    Ok((pdf, pdf_file))
 }
 
 /// Send the email
@@ -415,7 +415,7 @@ async fn main() -> Result<()> {
             }
         };
     };
-    let pdf = ready_invoice(
+    let (pdf, pdf_file) = ready_invoice(
         &client,
         &access,
         &file.id,
@@ -432,10 +432,12 @@ async fn main() -> Result<()> {
         let mut confirm = String::new();
         print!(
             "Please review the exported PDF at `{}` for correctness.
+Please review the google drive PDF at `{}` for correctness.
 Email is being sent from `{from_name} <{from_email}>` to `{INVOICE_EMAIL}`
 Type `y` or `yes` to continue, and anything else to abort.
 > ",
             output_base.display(),
+            pdf_file.web_view_link
         );
         std::io::stdout().flush().unwrap();
         stdin().read_line(&mut confirm).unwrap();
@@ -445,6 +447,7 @@ Type `y` or `yes` to continue, and anything else to abort.
     })
     .await?;
     if confirm {
+        println!("Sending Email");
         send_email(&client, &access, &pdf, &iso_time).await?;
     }
 
