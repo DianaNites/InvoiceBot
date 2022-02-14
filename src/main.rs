@@ -19,8 +19,8 @@ use url::Url;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Email that invoices should be sent to.
-// static INVOICE_EMAIL: &str = "Accounting <`accounting@mobilecoin.com.dontuse`>";
-static INVOICE_EMAIL: &str = "Diana <DianaNites@gmail.com>";
+static INVOICE_EMAIL: &str = "Accounting <accounting@mobilecoin.com>";
+// static INVOICE_EMAIL: &str = "Diana <DianaNites@gmail.com>";
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
