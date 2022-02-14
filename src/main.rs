@@ -292,7 +292,7 @@ async fn file_export(client: &Client, access: &Access, file_id: &str) -> Result<
     Ok(json.to_vec())
 }
 
-/// Get users name and email in the `Name <email>` format.
+/// Get users display name and email, respectively.
 async fn get_email(client: &Client, access: &Access) -> Result<(String, String)> {
     let url = Url::parse_with_params(
         "https://www.googleapis.com/drive/v3/about",
@@ -423,7 +423,26 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    send_email(&client, &access, &pdf, &iso_time).await?;
+    let (from_name, from_email) = get_email(&client, &access).await?;
+
+    let confirm = task::spawn_blocking(move || {
+        let mut confirm = String::new();
+        println!(
+            "Please review the exported PDF at `{}` for correctness.
+Email is being sent from `{from_name} <{from_email}>` to `{INVOICE_EMAIL}`
+Type `y` or `yes` to continue, and anything else to abort.
+",
+            output_base.display(),
+        );
+        stdin().read_line(&mut confirm).unwrap();
+        confirm.make_ascii_lowercase();
+        let s = confirm.trim();
+        s == "y" || s == "yes"
+    })
+    .await?;
+    if confirm {
+        send_email(&client, &access, &pdf, &iso_time).await?;
+    }
 
     Ok(())
 }
