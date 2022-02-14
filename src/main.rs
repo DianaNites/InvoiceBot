@@ -366,7 +366,7 @@ Content-Type: multipart/mixed; boundary=invoice_pdf
 --invoice_pdf
 Content-Type: text/plain; charset=\"UTF-8\"
 
-Here is my invoice for the previous 2 weeks, thank you.
+Here is my invoice, thank you.
 
 --invoice_pdf
 Content-Type: application/pdf; name=\"Invoice-{from_name}-{iso_time}.pdf\"
