@@ -4,7 +4,10 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{io::stdin, path::Path};
+use std::{
+    io::{stdin, Write},
+    path::Path,
+};
 use time::{macros::format_description, OffsetDateTime};
 use tokio::{
     fs,
@@ -427,13 +430,14 @@ async fn main() -> Result<()> {
 
     let confirm = task::spawn_blocking(move || {
         let mut confirm = String::new();
-        println!(
+        print!(
             "Please review the exported PDF at `{}` for correctness.
 Email is being sent from `{from_name} <{from_email}>` to `{INVOICE_EMAIL}`
 Type `y` or `yes` to continue, and anything else to abort.
-",
+> ",
             output_base.display(),
         );
+        std::io::stdout().flush().unwrap();
         stdin().read_line(&mut confirm).unwrap();
         confirm.make_ascii_lowercase();
         let s = confirm.trim();
