@@ -434,7 +434,8 @@ async fn main() -> Result<()> {
             "Please review the exported PDF at `{}` for correctness.
 Please review the google drive PDF at `{}` for correctness.
 Email is being sent from `{from_name} <{from_email}>` to `{INVOICE_EMAIL}`
-Type `y` or `yes` to continue, and anything else to abort.
+Type `y` or `yes` to continue sending the email, and anything else to abort.
+You will have to delete the incorrect files on google drive manually.
 > ",
             output_base.display(),
             pdf_file.web_view_link
