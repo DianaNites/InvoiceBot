@@ -450,6 +450,8 @@ You will have to delete the incorrect files on google drive manually.
     if confirm {
         println!("Sending Email");
         send_email(&client, &access, &pdf, &iso_time).await?;
+    } else {
+        println!("Aborting")
     }
 
     Ok(())
