@@ -1,6 +1,6 @@
 use reqwest::{
     header::{CONTENT_LENGTH, CONTENT_TYPE},
-    Client,
+    Client, StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -204,15 +204,21 @@ async fn refresh(client: &Client, access: Access, path: &Path) -> Result<Access>
         .header(CONTENT_LENGTH, "0")
         .send()
         .await?;
-    let text: Access = res.json().await?;
-    save_access(
-        Access {
-            refresh_token: access.refresh_token,
-            ..text
-        },
-        path,
-    )
-    .await
+    match res.status() {
+        StatusCode::OK => {
+            let text: Access = res.json().await?;
+            save_access(
+                Access {
+                    refresh_token: access.refresh_token,
+                    ..text
+                },
+                path,
+            )
+            .await
+        }
+        StatusCode::BAD_REQUEST => first_access(client, path).await,
+        e => Err(format!("Unknown OAUTH Refresh Status: {e}").into()),
+    }
 }
 
 /// Get the Invoice Template and Output Folder
