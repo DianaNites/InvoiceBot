@@ -330,7 +330,7 @@ async fn ready_invoice(
 ) -> Result<(Vec<u8>, FileResource)> {
     let pdf_file = file_copy(client, access, folder_id, file_id, iso_time).await?;
     let url = Url::parse_with_params(
-        &format!("{}/{}/values/D9:E9", SPREADSHEET_BASE, pdf_file.id),
+        &format!("{}/{}/values/D8:E8", SPREADSHEET_BASE, pdf_file.id),
         &[("valueInputOption", "USER_ENTERED")],
     )?;
     client
