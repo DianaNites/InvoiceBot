@@ -372,7 +372,12 @@ Content-Type: multipart/mixed; boundary=invoice_pdf
 --invoice_pdf
 Content-Type: text/plain; charset=\"UTF-8\"
 
-Here is my invoice, thank you.
+Hello,
+
+Here is my invoice
+
+Thanks,
+{first_name}
 
 --invoice_pdf
 Content-Type: application/pdf; name=\"Invoice-{from_name}-{iso_time}.pdf\"
@@ -388,6 +393,7 @@ Content-Transfer-Encoding: base64
         from_name = display,
         from_email = email,
         iso_time = iso_time,
+        first_name = display.split(' ').next().unwrap()
     )
     .replace('\n', "\r\n");
     let len = msg.len();
